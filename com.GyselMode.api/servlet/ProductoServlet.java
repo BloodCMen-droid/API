@@ -11,8 +11,7 @@ import java.util.Map;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
+
 
 
 @WebServlet("/ProductoServlet")
@@ -86,17 +85,18 @@ public class ProductoServlet extends HttpServlet {
             String adicional = request.getParameter("adicional");
 
             // ================= Subir imagen =================
-            String urlImagen = "https://res.cloudinary.com/demo/image/upload/v1/default.png"; // URL por defecto
+            String urlImagen = ""; // URL por defecto
             Part filePart = request.getPart("imagen");
 
             if (filePart != null && filePart.getSize() > 0) {
                 // Configura tu cuenta de Cloudinary
                 Cloudinary cloudinary = new Cloudinary(ObjectUtils.asMap(
-                        "cloud_name", "TU_CLOUD_NAME",
-                        "api_key", "TU_API_KEY",
-                        "api_secret", "TU_API_SECRET"
+                        "cloud_name", "dmyvnafew",
+                        "api_key", "256116538663764",
+                        "api_secret", "9dfbMS5H1XssIc8plrjeUu8AySU",
+                        "secure",     true
                 ));
-
+                @SuppressWarnings("rawtypes")
                 Map uploadResult = cloudinary.uploader().upload(filePart.getInputStream(), ObjectUtils.emptyMap());
                 urlImagen = (String) uploadResult.get("secure_url"); // URL pública de la imagen
             }
@@ -122,17 +122,20 @@ public class ProductoServlet extends HttpServlet {
 
 
 
-    // ================= PUT: Actualizar producto =================
+ // ================= PUT: Actualizar producto =================
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
         response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
         response.setContentType("application/json;charset=UTF-8");
         PrintWriter out = response.getWriter();
 
         try {
-            // Obtener parámetros normales
+            // Obtener parámetros del formulario
             int id = Integer.parseInt(request.getParameter("id"));
             String nombre = request.getParameter("nombre");
             String descripcion = request.getParameter("descripcion");
@@ -141,33 +144,52 @@ public class ProductoServlet extends HttpServlet {
             String talla = request.getParameter("talla");
             String adicional = request.getParameter("adicional");
 
-            // Obtener producto existente
-            Producto existente = dao.obtenerPorId(id); 
-            String fileName = existente.getImagen(); // mantener imagen actual
-
-            // Revisar si se subió una nueva imagen
-            Part filePart = request.getPart("imagen");
-            if(filePart != null && filePart.getSize() > 0){
-                fileName = System.currentTimeMillis() + "_" + filePart.getSubmittedFileName();
-                String uploadPath = getServletContext().getRealPath("/IMG/Card");
-                File uploadDir = new File(uploadPath);
-                if(!uploadDir.exists()) uploadDir.mkdir();
-                filePart.write(uploadPath + File.separator + fileName);
+            // Obtener el producto existente para mantener la imagen actual si no suben una nueva
+            Producto existente = dao.obtenerPorId(id);
+            if (existente == null) {
+                response.setStatus(404);
+                out.print("{\"error\":\"Producto no encontrado\"}");
+                return;
             }
+            String urlImagen = existente.getImagen(); // Imagen actual por defecto
 
-            Producto p = new Producto(id, nombre, descripcion, precio, adicional, talla, color, fileName);
+            // ================= Subir nueva imagen a Cloudinary si la envían =================
+            Part filePart = request.getPart("imagen");
+            if (filePart != null && filePart.getSize() > 0) {
+                // Usar la misma configuración que en doPost (mejor si tienes CloudinaryConfig)
+                Cloudinary cloudinary = new Cloudinary(ObjectUtils.asMap(
+                    "cloud_name", "dmyvnafew",
+                    "api_key",    "256116538663764",
+                    "api_secret", "9dfbMS5H1XssIc8plrjeUu8AySU",
+                    "secure",     true
+                ));
 
-            if(dao.actualizar(p)){
-                out.print("{\"msg\":\"Producto actualizado\"}");
+                @SuppressWarnings("rawtypes")
+                Map uploadResult = cloudinary.uploader().upload(filePart.getInputStream(),
+                    ObjectUtils.asMap(
+                        "folder", "gyselmode/productos",  // opcional: organiza las imágenes
+                        "overwrite", true
+                    ));
+
+                urlImagen = (String) uploadResult.get("secure_url");
+            }
+            // Si no envían imagen, se mantiene la anterior (urlImagen = existente.getImagen())
+
+            // Crear objeto actualizado
+            Producto p = new Producto(id, nombre, descripcion, precio, adicional, talla, color, urlImagen);
+
+            // Actualizar en la base de datos
+            if (dao.actualizar(p)) {
+                out.print("{\"msg\":\"Producto actualizado con éxito\"}");
             } else {
                 response.setStatus(500);
-                out.print("{\"error\":\"No se pudo actualizar\"}");
+                out.print("{\"error\":\"No se pudo actualizar el producto\"}");
             }
 
-        } catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
             response.setStatus(500);
-            out.print("{\"error\":\"Error al procesar PUT\"}");
+            out.print("{\"error\":\"Error al procesar PUT: " + e.getMessage() + "\"}");
         } finally {
             out.flush();
             out.close();
