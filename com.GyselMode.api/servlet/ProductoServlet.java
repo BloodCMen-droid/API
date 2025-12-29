@@ -135,50 +135,42 @@ public class ProductoServlet extends HttpServlet {
         PrintWriter out = response.getWriter();
 
         try {
-            // Obtener parámetros del formulario
-            int id = Integer.parseInt(request.getParameter("id"));
-            String nombre = request.getParameter("nombre");
-            String descripcion = request.getParameter("descripcion");
-            double precio = Double.parseDouble(request.getParameter("precio"));
-            String color = request.getParameter("color");
-            String talla = request.getParameter("talla");
-            String adicional = request.getParameter("adicional");
+            // ======= Leer parámetros correctamente para multipart =======
+            int id = 0;
+            String nombre = "", descripcion = "", color = "", talla = "", adicional = "";
+            double precio = 0;
 
-            // Obtener el producto existente para mantener la imagen actual si no suben una nueva
+            // Recorrer todas las partes
+            for (Part part : request.getParts()) {
+                String fieldName = part.getName();
+                String value = new BufferedReader(new InputStreamReader(part.getInputStream()))
+                                    .readLine(); // leer el contenido
+
+                switch(fieldName) {
+                    case "id": id = Integer.parseInt(value); break;
+                    case "nombre": nombre = value; break;
+                    case "descripcion": descripcion = value; break;
+                    case "precio": precio = Double.parseDouble(value); break;
+                    case "color": color = value; break;
+                    case "talla": talla = value; break;
+                    case "adicional": adicional = value; break;
+                    default: break;
+                }
+            }
+
+            // ====== Obtener producto existente ======
             Producto existente = dao.obtenerPorId(id);
             if (existente == null) {
                 response.setStatus(404);
                 out.print("{\"error\":\"Producto no encontrado\"}");
                 return;
             }
-            String urlImagen = existente.getImagen(); // Imagen actual por defecto
+            String urlImagen = existente.getImagen(); // mantener la imagen actual
 
-            // ================= Subir nueva imagen a Cloudinary si la envían =================
-            Part filePart = request.getPart("imagen");
-            if (filePart != null && filePart.getSize() > 0) {
-                // Usar la misma configuración que en doPost (mejor si tienes CloudinaryConfig)
-                Cloudinary cloudinary = new Cloudinary(ObjectUtils.asMap(
-                    "cloud_name", "dmyvnafew",
-                    "api_key",    "256116538663764",
-                    "api_secret", "9dfbMS5H1XssIc8plrjeUu8AySU",
-                    "secure",     true
-                ));
-
-                @SuppressWarnings("rawtypes")
-                Map uploadResult = cloudinary.uploader().upload(filePart.getInputStream(),
-                    ObjectUtils.asMap(
-                        "folder", "gyselmode/productos",  // opcional: organiza las imágenes
-                        "overwrite", true
-                    ));
-
-                urlImagen = (String) uploadResult.get("secure_url");
-            }
-            // Si no envían imagen, se mantiene la anterior (urlImagen = existente.getImagen())
-
-            // Crear objeto actualizado
+            // ====== Crear objeto actualizado ======
             Producto p = new Producto(id, nombre, descripcion, precio, adicional, talla, color, urlImagen);
 
-            // Actualizar en la base de datos
+            // ====== Actualizar en la base de datos ======
             if (dao.actualizar(p)) {
                 out.print("{\"msg\":\"Producto actualizado con éxito\"}");
             } else {
