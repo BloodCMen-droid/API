@@ -7,6 +7,13 @@ import jakarta.servlet.http.*;
 import jakarta.servlet.annotation.*;
 import java.io.*;
 import java.sql.SQLException;
+import java.util.Map;
+
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+
 
 @WebServlet("/ProductoServlet")
 @MultipartConfig(
@@ -65,6 +72,8 @@ public class ProductoServlet extends HttpServlet {
             throws ServletException, IOException {
 
         response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setContentType("application/json;charset=UTF-8");
         PrintWriter out = response.getWriter();
 
@@ -77,21 +86,22 @@ public class ProductoServlet extends HttpServlet {
             String adicional = request.getParameter("adicional");
 
             // ================= Subir imagen =================
+            String urlImagen = "https://res.cloudinary.com/demo/image/upload/v1/default.png"; // URL por defecto
             Part filePart = request.getPart("imagen");
-            String fileName = "default.png";
+
             if (filePart != null && filePart.getSize() > 0) {
-                fileName = System.currentTimeMillis() + "_" + filePart.getSubmittedFileName();
+                // Configura tu cuenta de Cloudinary
+                Cloudinary cloudinary = new Cloudinary(ObjectUtils.asMap(
+                        "cloud_name", "TU_CLOUD_NAME",
+                        "api_key", "TU_API_KEY",
+                        "api_secret", "TU_API_SECRET"
+                ));
 
-                // Ruta dentro del proyecto back-end: IMG/Card
-             // Carpeta dentro de WebContent
-                String uploadPath = getServletContext().getRealPath("/IMG/Card");
-                File uploadDir = new File(uploadPath);
-                if (!uploadDir.exists()) uploadDir.mkdirs(); // crea si no existe
-                filePart.write(uploadPath + File.separator + fileName);
-
+                Map uploadResult = cloudinary.uploader().upload(filePart.getInputStream(), ObjectUtils.emptyMap());
+                urlImagen = (String) uploadResult.get("secure_url"); // URL pública de la imagen
             }
 
-            Producto p = new Producto(0, nombre, descripcion, precio, adicional, talla, color, fileName);
+            Producto p = new Producto(0, nombre, descripcion, precio, adicional, talla, color, urlImagen);
 
             if (dao.agregar(p)) {
                 out.print("{\"msg\":\"Producto agregado\"}");
@@ -109,6 +119,7 @@ public class ProductoServlet extends HttpServlet {
             out.close();
         }
     }
+
 
 
     // ================= PUT: Actualizar producto =================
